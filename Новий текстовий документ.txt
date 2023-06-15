@@ -1,0 +1,340 @@
+import pygame
+import random
+import math
+# Ініціалізація Pygame
+pygame.init()
+
+# Задаємо розміри вікна гри
+screenw = 800
+screenh = 600
+
+# Ініціалізуємо вікно гри та головний екран
+win = pygame.display.set_mode((screenw, screenh))
+pygame.display.set_caption("Asteroids")
+
+# Завантаження фонового зображення
+bg = pygame.image.load("background.jpg")
+
+# Завантаження зображень гравця, куль та астероїдів
+player_img = pygame.image.load("hp.png")
+bullet_img = pygame.image.load("green_laser.jpg")
+asteroid_imgs = [
+    pygame.image.load("rocket.png"),
+    pygame.image.load("rocket2.png"),
+]
+
+# Задання розмірів гравця, куль та астероїдів
+player_size = player_img.get_size()
+bullet_size = bullet_img.get_size()
+asteroid_sizes = [
+    asteroid_imgs[0].get_size(),
+    asteroid_imgs[1].get_size(),
+]
+
+# Завантаження звуків
+shoot_sound = pygame.mixer.Sound("laser.wav")
+explosion_sound = pygame.mixer.Sound("bangLarge.wav")
+
+# Встановлення шрифту для тексту
+font_name = pygame.font.match_font("arial")
+
+# Глобальні змінні
+clock = pygame.time.Clock()
+gameover = False
+score = 0
+lives = 3
+rapidFire = False
+rfStart = False
+isSoundOn = True
+
+
+
+# Клас гравця
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.transform.scale(player_img, (64, 64))
+        self.rect = self.image.get_rect()
+        self.rect.centerx = screenw // 2
+        self.rect.centery = screenh // 2
+        self.velocity = pygame.Vector2(0, 0)
+        self.rotation = 0
+
+    def rotate_left(self):
+        self.rotation += 5
+
+    def rotate_right(self):
+        self.rotation -= 5
+
+    def thrust(self):
+        angle = self.rotation * (math.pi / 180.0)
+        acceleration = pygame.Vector2(0.05 * math.sin(angle), -0.05 * math.cos(angle))
+        self.velocity += acceleration
+
+    def shoot(self, rapid):
+        if rapid:
+            bullets.add(
+                Bullet(self.rect.centerx, self.rect.centery, self.rotation - 20)
+            )
+            bullets.add(
+                Bullet(self.rect.centerx, self.rect.centery, self.rotation + 20)
+            )
+        else:
+            bullets.add(
+                Bullet(self.rect.centerx, self.rect.centery, self.rotation)
+            )
+        if isSoundOn:
+            shoot_sound.play()
+
+    def update(self):
+        self.rect.centerx += self.velocity.x
+        self.rect.centery += self.velocity.y
+
+        if self.rect.right < 0:
+            self.rect.left = screenw
+        if self.rect.left > screenw:
+            self.rect.right = 0
+        if self.rect.bottom < 0:
+            self.rect.top = screenh
+        if self.rect.top > screenh:
+            self.rect.bottom = 0
+
+        self.image = pygame.transform.rotate(player_img, self.rotation)
+
+# Клас куль
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y, rotation):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.transform.scale(bullet_img, (16, 16))
+        self.rect = self.image.get_rect()
+        
+        angle = math.radians(rotation)
+        
+        # Calculate the vertical and horizontal components of velocity
+        self.velocity_x = 0  # No horizontal movement
+        self.velocity_y = -10 * math.cos(angle)  # Negative vertical velocity
+        
+        self.rect.centerx = x
+        self.rect.centery = y
+
+    def update(self):
+        self.rect.centerx += self.velocity_x
+        self.rect.centery += self.velocity_y
+
+        
+
+        # Видалення кулі, якщо вона виходить за межі екрану
+        if (
+            self.rect.right < 0
+            or self.rect.left > screenw
+            or self.rect.bottom < 0
+            or self.rect.top > screenh
+        ):
+            self.kill()
+
+
+
+# Клас астероїдів
+class Asteroid(pygame.sprite.Sprite):
+    def __init__(self, x, y, size):
+        pygame.sprite.Sprite.__init__(self)
+        self.size = size
+        self.image = pygame.transform.scale(
+            asteroid_imgs[size - 1], (64 * size, 64 * size)
+        )
+        self.rect = self.image.get_rect()
+        self.rect.centerx = x
+        self.rect.centery = y
+        self.speedx = random.randint(-3, 3)
+        self.speedy = random.randint(-3, 3)
+
+    def update(self):
+        self.rect.x += self.speedx
+        self.rect.y += self.speedy
+
+        # Перевірка виходу астероїда за межі екрану
+        if self.rect.right < 0:
+            self.rect.left = screenw
+        if self.rect.left > screenw:
+            self.rect.right = 0
+        if self.rect.bottom < 0:
+            self.rect.top = screenh
+        if self.rect.top > screenh:
+            self.rect.bottom = 0
+
+        # Перевірка виходу астероїда за межі екрану з іншого боку
+        if self.rect.left > screenw:
+            self.rect.right = 0
+        if self.rect.right < 0:
+            self.rect.left = screenw
+        if self.rect.top > screenh:
+            self.rect.bottom = 0
+        if self.rect.bottom < 0:
+            self.rect.top = screenh
+
+
+# Функція для відображення тексту
+def draw_text(text, size, x, y, color):
+    font = pygame.font.Font(font_name, size)
+    text_surface = font.render(text, True, color)
+    text_rect = text_surface.get_rect()
+    text_rect.midtop = (x, y)
+    win.blit(text_surface, text_rect)
+
+
+# Функція для відображення початкового екрану
+def show_start_screen():
+    win.blit(bg, (0, 0))
+    draw_text("Asteroids", 64, screenw // 2, screenh // 4, (255, 255, 255))
+    draw_text("Press SPACE to start", 22, screenw // 2, screenh // 2, (255, 255, 255))
+    pygame.display.flip()
+    waiting = True
+    while waiting:
+        clock.tick(60)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    waiting = False
+
+
+# Функція для відображення екрану завершення гри
+def show_gameover_screen():
+    win.blit(bg, (0, 0))
+    draw_text("Game Over", 64, screenw // 2, screenh // 4, (255, 255, 255))
+    draw_text("Score: " + str(score), 22, screenw // 2, screenh // 2, (255, 255, 255))
+    draw_text("Press SPACE to play again", 22, screenw // 2, screenh // 2 + 50, (255, 255, 255))
+    pygame.display.flip()
+    waiting = True
+    while waiting:
+        clock.tick(60)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    waiting = False
+
+
+# Створення гравця
+player = Player()
+
+# Створення списків для куль та астероїдів
+bullets = pygame.sprite.Group()
+asteroids = pygame.sprite.Group()
+
+# Створення астероїдів
+for i in range(8):
+    x = random.randrange(0, screenw)
+    y = random.randrange(0, screenh)
+    size = random.randint(1, 2)
+    asteroid = Asteroid(x, y, size)
+    asteroids.add(asteroid)
+
+# Головний цикл гри
+running = True
+start_screen = True
+game_paused = False  # Прапорець для паузи в грі
+while running:
+    if start_screen:
+        show_start_screen()
+        start_screen = False
+
+    # Задаємо колір фону
+    win.fill((0, 0, 0))
+
+    # Відображення фонового зображення
+    win.blit(bg, (0, 0))
+
+    # Оновлення гравця та астероїдів
+    if not game_paused:  # Перевірка, чи гра не у паузі
+        player.update()
+        bullets.update()
+        asteroids.update()
+
+    # Відображення гравця, куль та астероїдів
+    win.blit(player.image, player.rect)
+    bullets.draw(win)
+    asteroids.draw(win)
+
+    # Відображення рахунку та життів
+    draw_text("Score: " + str(score), 18, 70, 10, (255, 255, 255))
+    draw_text("Lives: " + str(lives), 18, screenw - 70, 10, (255, 255, 255))
+    
+    if game_paused:
+        draw_text("PAUSED", 64, screenw // 2, screenh // 2, (255, 255, 255))
+
+    # Оновлення екрану
+    pygame.display.flip()
+
+
+    #
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:  # Натискання клавіші ESC
+                if game_paused:
+                    game_paused = False
+                else:
+                    game_paused = True
+            if not game_paused:  # Перевірка, чи гра не у паузі
+                if event.key == pygame.K_a or event.key == pygame.K_LEFT:
+                    player.rotate_left()
+                if event.key == pygame.K_d or event.key == pygame.K_RIGHT:
+                    player.rotate_right()
+                if event.key == pygame.K_w or event.key == pygame.K_UP:
+                    player.thrust()
+                if event.key == pygame.K_SPACE:
+                    player.shoot(rapidFire)
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_SPACE:
+                rapidFire = False
+
+
+
+    # Зіткнення куль та астероїдів
+    hits = pygame.sprite.groupcollide(asteroids, bullets, True, True)
+    for hit in hits:
+        explosion_sound.play()
+        score += 10 - hit.size * 2
+        size = hit.size
+        if size > 1:
+            for i in range(2):
+                x = hit.rect.centerx + random.randint(-hit.size * 10, hit.size * 10)
+                y = hit.rect.centery + random.randint(-hit.size * 10, hit.size * 10)
+                size -= 1
+                asteroid = Asteroid(x, y, size)
+                asteroids.add(asteroid)
+
+    # Зіткнення гравця та астероїдів
+    hits = pygame.sprite.spritecollide(player, asteroids, True)
+    for hit in hits:
+        explosion_sound.play()
+        lives -= 1
+        if lives <= 0:
+            gameover = True
+            show_gameover_screen()
+            game_paused = False
+        else:
+            player.rect.centerx = screenw // 2
+            player.rect.centery = screenh // 2
+
+    # Якщо астероїди закінчилися, створюємо нові
+    if len(asteroids) == 0:
+        for i in range(8):
+            x = random.randrange(0, screenw)
+            y = random.randrange(0, screenh)
+            size = random.randint(1, 2)
+            asteroid = Asteroid(x, y, size)
+            asteroids.add(asteroid)
+        
+
+    # Обмежуємо FPS до 60
+    clock.tick(60)
+
+# Закриття вікна гри
+pygame.quit()
